@@ -2,31 +2,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torchvision.models import resnet18
+
+
 
 class PatchEncoder(nn.Module):
     def __init__(self, embed_dim=256):
         super().__init__()
-        self.cnn =  nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
 
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
+        base = resnet18(weights=None)
+        self.cnn = nn.Sequential(*list(base.children())[:-1])
 
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-        )
-
-        self.proj = nn.Linear(128, embed_dim)
+        self.proj = nn.Linear(512, embed_dim)
 
     def forward(self, patches):
         feats = self.cnn(patches)
@@ -51,40 +38,6 @@ class Matcher(nn.Module):
         patches = patches.reshape(B * Tq, C, H, W).contiguous()
         patch_embeds = self.encoder(patches)
         return patch_embeds, B, Tq
-
-
-    # def predict(self, x, memory, cls):
-                
-    #     image_patches = self.extractor(x)
-    #     mem_patches = self.extractor(memory)
-
-    #     B, Tq, C, H, W = image_patches.shape
-    #     M, Tm, _, _, _ = mem_patches.shape
-
-    #     image_patches = image_patches.view(B * Tq, C, H, W)
-    #     mem_patches = mem_patches.view(M * Tm, C, H, W)
-
-    #     image_feats = self.encoder(image_patches)
-    #     mem_feats = self.encoder(mem_patches)
-
-    #     image_feats = image_feats.view(image_feats.size(0), -1) 
-    #     mem_feats = mem_feats.view(mem_feats.size(0), -1)
-
-    #     image_feats_norm = image_feats / image_feats.norm(dim=1, keepdim=True) 
-    #     mem_feats_norm = mem_feats / mem_feats.norm(dim=1, keepdim=True)
-
-    #     sim = torch.matmul(image_feats_norm, mem_feats_norm.t())
-
-    #     cls = cls.repeat_interleave(Tm)
-    #     cls_one_hot = F.one_hot(cls, num_classes=self.num_classes).float()
-
-    #     sim_per_class = sim @ cls_one_hot
-    #     sim_per_class = sim_per_class.view(B, Tq, self.num_classes)
-
-    #     logits = sim_per_class.sum(dim=1)
-
-    #     return logits
-
 
     def logits_from_batch_memory(self, x, y):
 
