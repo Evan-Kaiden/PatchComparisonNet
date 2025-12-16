@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from matchnet import Matcher
 from samplier import extract_patches
@@ -8,40 +9,45 @@ from dataloader import testloader, memloader
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-def undoNorm(img):
-    mean = torch.tensor([0.4914, 0.4822, 0.4465]).view(3,1,1)
-    std  = torch.tensor([0.2470, 0.2435, 0.2616]).view(3,1,1)
-
-    if img.dim() == 3:
-        return img * std + mean
-    elif img.dim() == 4:
-        return img * std[None] + mean[None]
 def top_k_contributors(
     image: torch.Tensor,
-    model: Matcher,
+    model,
     memory: torch.Tensor,
     memory_cls: torch.Tensor,
     k: int = 10,
-    cls_filter: str = "pred", 
+    cls_filter: str = "pred",      # "pred" or "true"
     true_label: int | None = None,
 ):
+    """
+    Returns relations only where the *query patch* is among the selector's chosen patches.
+    Assumes B==1 for image.
+    """
     assert image.ndim == 4 and image.size(0) == 1
+
+    device = next(model.parameters()).device
+    image = image.to(device)
+    memory = memory.to(device)
 
     img_patches = model.extractor(image)
     mem_patches = model.extractor(memory)
 
-    _, Tq, C, H, W = img_patches.shape
+    _, Tq, C, ph, pw = img_patches.shape
     M, Tm, _, _, _ = mem_patches.shape
 
-    img_patches_flat = img_patches.reshape(Tq, C, H, W).contiguous()
-    mem_patches_flat = mem_patches.reshape(M * Tm, C, H, W).contiguous()
+    img_patches_flat = img_patches.reshape(Tq, C, ph, pw).contiguous()
+    mem_patches_flat = mem_patches.reshape(M * Tm, C, ph, pw).contiguous()
 
     img_embeds = model.encoder(img_patches_flat)
     mem_embeds = model.encoder(mem_patches_flat)
 
-    sim = (img_embeds @ mem_embeds.t()) / model.temperature 
+    idx, _ = model.select_query_patches(image)
+    idx = idx.view(-1).to(device)
+    Ksel = idx.numel()
 
-    device = sim.device
+    selected_mask = torch.zeros(Tq, dtype=torch.bool, device=device)
+    selected_mask[idx] = True
+
+    sim_selected = (img_embeds[selected_mask] @ mem_embeds.t()) / model.temperature
 
     if memory_cls.ndim == 2:
         memory_cls = memory_cls.argmax(dim=1)
@@ -53,51 +59,55 @@ def top_k_contributors(
         target_cls = int(true_label)
     else:
         with torch.no_grad():
-            logits = model.predict(image, memory, memory_cls)
-        target_cls = int(logits.argmax(dim=1).item())
+            logits_img = model.predict(image, memory, memory_cls)
+        target_cls = int(logits_img.argmax(dim=1).item())
 
     mem_labels = memory_cls.repeat_interleave(Tm)
-    assert mem_labels.shape[0] == M * Tm
+    mask_mem = (mem_labels == target_cls)
 
-    mask = (mem_labels == target_cls)
-
-    if mask.any():
-        masked_sim = sim[:, mask]
-        mem_idx_all = mask.nonzero(as_tuple=False).view(-1)
+    if mask_mem.any():
+        sim_f = sim_selected[:, mask_mem]
+        mem_idx_all = mask_mem.nonzero(as_tuple=False).view(-1)
     else:
-        masked_sim = sim 
+        sim_f = sim_selected
         mem_idx_all = torch.arange(M * Tm, device=device)
 
-    sim_flat = masked_sim.reshape(-1)
+    sim_flat = sim_f.reshape(-1)
     k_eff = min(k, sim_flat.numel())
     scores, top_indices = torch.topk(sim_flat, k_eff, largest=True)
 
-    L = masked_sim.shape[1]
-    img_patch_idx = (top_indices // L)
-    mem_idx_in_mask = (top_indices % L)
-    mem_patch_idx = mem_idx_all[mem_idx_in_mask]
+    L = sim_f.shape[1]
 
-    if mask.any():
-        picked_image_idx = (mem_patch_idx // Tm)  # [k_eff]
-        assert (memory_cls[picked_image_idx] == target_cls).all(), \
+    img_local = top_indices // L
+    mem_in_mask = top_indices % L
+
+    selected_idx_list = idx
+    img_patch_idx = selected_idx_list[img_local]
+
+    mem_patch_idx = mem_idx_all[mem_in_mask]
+
+    if mask_mem.any():
+        picked_mem_image_idx = mem_patch_idx // Tm
+        assert (memory_cls[picked_mem_image_idx] == target_cls).all(), \
             "Selected memory patches are not all from the filtered class!"
 
     relations = []
-    for img_idx, mem_idx, score in zip(img_patch_idx.tolist(),
-                                       mem_patch_idx.tolist(),
-                                       scores.tolist()):
-        mem_image_idx = mem_idx // Tm
-        mem_patch_in_image = mem_idx % Tm
+    for q_idx, mp_idx, score in zip(img_patch_idx.tolist(),
+                                    mem_patch_idx.tolist(),
+                                    scores.tolist()):
+        mem_image_idx = mp_idx // Tm
+        mem_patch_in_image = mp_idx % Tm
 
         relations.append({
             "score": float(score),
-            "target_cls": target_cls,
-            "img_patch_index": int(img_idx),
-            "mem_patch_global_index": int(mem_idx),
+            "target_cls": int(target_cls),
+
+            "img_patch_index": int(q_idx),
             "mem_image_index": int(mem_image_idx),
             "mem_patch_index_in_image": int(mem_patch_in_image),
-            "img_patch": img_patches_flat[img_idx],
-            "mem_patch": mem_patches_flat[mem_idx],
+
+            "img_patch": img_patches_flat[q_idx].detach().cpu(),
+            "mem_patch": mem_patches_flat[mp_idx].detach().cpu(),
         })
 
     return relations
@@ -113,10 +123,15 @@ def show_relation_on_images(
     denorm_fn=None,
     title: str = None,
 ):
-
+    """
+    Draws the query patch + memory patch rectangles for one relation dict.
+    """
     img_patch_idx = int(relation["img_patch_index"])
     mem_image_index = int(relation["mem_image_index"])
     mem_patch_idx_in_image = int(relation["mem_patch_index_in_image"])
+
+    image = image.cpu()
+    memory = memory.cpu()
 
     _, _, H_img, W_img = image.shape
     _, _, H_mem, W_mem = memory.shape
@@ -127,9 +142,9 @@ def show_relation_on_images(
     n_h_mem = (H_mem - kernel_size) // stride + 1
     n_w_mem = (W_mem - kernel_size) // stride + 1
 
-    
     Tq_expected = n_h_img * n_w_img
     Tm_expected = n_h_mem * n_w_mem
+
     assert img_patch_idx < Tq_expected, f"img_patch_idx {img_patch_idx} out of range {Tq_expected}"
     assert mem_patch_idx_in_image < Tm_expected, f"mem_patch_idx {mem_patch_idx_in_image} out of range {Tm_expected}"
 
@@ -156,24 +171,35 @@ def show_relation_on_images(
     fig, axes = plt.subplots(1, 2, figsize=(8, 4))
 
     axes[0].imshow(img_vis)
-    axes[0].add_patch(Rectangle((x_img, y_img), kernel_size, kernel_size,
-                                linewidth=2, edgecolor="r", facecolor="none"))
-    axes[0].set_title("Input image")
+    axes[0].add_patch(Rectangle(
+        (x_img, y_img),
+        kernel_size,
+        kernel_size,
+        linewidth=2,
+        edgecolor="r",
+        facecolor="none",
+    ))
+    axes[0].set_title("Input image (selected patch)")
     axes[0].axis("off")
 
     axes[1].imshow(mem_vis)
-    axes[1].add_patch(Rectangle((x_mem, y_mem), kernel_size, kernel_size,
-                                linewidth=2, edgecolor="r", facecolor="none"))
+    axes[1].add_patch(Rectangle(
+        (x_mem, y_mem),
+        kernel_size,
+        kernel_size,
+        linewidth=2,
+        edgecolor="r",
+        facecolor="none",
+    ))
     axes[1].set_title(f"Memory image {mem_image_index}")
     axes[1].axis("off")
 
     if title is None:
-        title = f"Match score: {relation['score']:.3f}"
+        title = f"Match score: {relation['score']:.3f} | target_cls: {relation['target_cls']}"
 
     fig.suptitle(title)
     plt.tight_layout()
     plt.show()
-
 
 
 kernel = 18
