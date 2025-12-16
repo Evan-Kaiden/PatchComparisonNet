@@ -32,7 +32,7 @@ def main():
           criterion=criterion, scheduler=scheduler, device=device
           )
     
-    # sim_classify(m.encoder, testloader, memloader, extractor, device=device)
+    sim_classify(m.encoder, testloader, memloader, extractor, device=device)
 
     torch.save(m.state_dict(), "model.pth")
 
