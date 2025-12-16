@@ -20,11 +20,20 @@ def main():
     elif torch.mps.is_available():
         device = "mps"
 
+    print("device: ", device)
+
     m = Matcher(10, extractor).to(device)
     opt = torch.optim.Adam(m.parameters())
     criterion = torch.nn.CrossEntropyLoss()
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    opt, factor=0.1, patience=5, verbose=True
+    )
     
-    train(epochs=10, model=m, trainloader=trainloader, testloader=testloader, memloader=memloader, optimizer=opt, criterion=criterion, device=device)
+    train(epochs=100, model=m, trainloader=trainloader, 
+          testloader=testloader, memloader=memloader, optimizer=opt, 
+          criterion=criterion, scheduler=scheduler, device=device
+          )
+    
     sim_classify(m.encoder, testloader, memloader, extractor, device=device)
 
     torch.save(m.state_dict(), "model.pth")

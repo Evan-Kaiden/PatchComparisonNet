@@ -9,11 +9,11 @@ from losses import SupervisedContrastiveLoss
 
 contrastive_loss = SupervisedContrastiveLoss()
 
-def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, optimizer : Optimizer, criterion, device=None):
+def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, optimizer : Optimizer, criterion, scheduler, device=None):
     model.train()
     total = len(trainloader)
     pbar = tqdm(total=total, desc=f"Train Epoch {epoch}", leave=False)
-
+    total_loss = 0.0
     with pbar:
         for images,targets in trainloader:
             images, targets = images.to(device), targets.to(device)
@@ -28,11 +28,14 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, op
 
             contrast_loss = contrastive_loss(patch_embeds, targets)
 
-            loss = ce_loss  + 0.1 * contrast_loss
+            loss = ce_loss  + 0.25 * contrast_loss
+            total_loss += loss.item()
+            
             loss.backward()
             optimizer.step()
 
             pbar.update(1)
+        scheduler.step(total_loss / total)
 
 
 def test(epoch: int, model : nn.Module, testloader : DataLoader, memloader : DataLoader, criterion, device=None):
@@ -74,7 +77,7 @@ def test(epoch: int, model : nn.Module, testloader : DataLoader, memloader : Dat
 
     print(f"Epoch {epoch} | Loss {loss_total / total :.3f} | Accuracy {correct_total / total :.3f} ({correct_total}/{total})")
 
-def train(epochs : int, model : nn.Module, trainloader : DataLoader, testloader: DataLoader, memloader: DataLoader, optimizer : Optimizer, criterion, device=None):
+def train(epochs : int, model : nn.Module, trainloader : DataLoader, testloader: DataLoader, memloader: DataLoader, optimizer : Optimizer, criterion, scheduler, device=None):
     for epoch in range(epochs):
-        train_one_epoch(epoch, model, trainloader, optimizer, criterion, device)
+        train_one_epoch(epoch, model, trainloader, optimizer, criterion, scheduler, device)
         test(epoch, model, testloader, memloader, criterion, device)
