@@ -11,6 +11,15 @@ from dataloader import trainloader, testloader, memloader
 import argparse
 from mapping import map_arg
 
+import os
+import json
+from datetime import datetime
+
+run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+run_dir = os.path.join("runs", run_id)
+os.makedirs(run_dir, exist_ok=True)
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--backbone', type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'
@@ -37,7 +46,6 @@ elif torch.mps.is_available():
 
 print("device: ", device)
 
-
 backbone = map_arg[args.backbone]
 m = Matcher(10, extractor, backbone).to(device)
 opt = map_arg[args.optimizer](m.parameters(), lr=args.lr)
@@ -49,7 +57,7 @@ if scheduler == "cosine":
 elif scheduler == "linear":
     scheduler = map_arg[scheduler](optimizer=opt, total_iters=args.epochs, start_factor=1, end_factor=.75)
 elif scheduler == "step":
-    scheduler = map_arg[scheduler](optimizer=opt, gamma=args.epochs//10, step_size=0.5)
+    scheduler = map_arg[scheduler](optimizer=opt, step_size=max(1, args.epochs // 10), gamma=0.5)
 else:
     scheduler = None
 
@@ -58,6 +66,23 @@ train(epochs=args.epochs, model=m, trainloader=trainloader,
         criterion=criterion, scheduler=scheduler, device=device
         )
 
-sim_classify(m.encoder, testloader, memloader, extractor, device=device)
+config = vars(args)
 
-torch.save(m.state_dict(), "model.pth")
+config.update({
+    "device": device,
+    "num_classes": 10,
+    "optimizer_class": opt.__class__.__name__,
+    "scheduler": args.lr_scheduler,
+    "backbone_class": backbone.__class__.__name__,
+})
+
+with open(os.path.join(run_dir, "config.json"), "w") as f:
+    json.dump(config, f, indent=2)
+
+torch.save(
+    {
+        "model_state": m.state_dict(),
+        "config": config,
+    },
+    os.path.join(run_dir, "model.pth"),
+)
