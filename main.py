@@ -58,9 +58,15 @@ scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.epochs, ar
 config = vars(args)
 
 start_epoch = 0
-if args.continue_train and os.path.exists(os.path.join(args.run_dir, "model.pth")):
+print( args.continue_train, os.path.exists(os.path.join(args.run_dir, "state.pth")))
+if args.continue_train and os.path.exists(os.path.join(args.run_dir, "state.pth")):
     checkpoint = torch.load(os.path.join(args.run_dir, "state.pth"), map_location=device)
     config = checkpoint.get("config", config)
+
+    backbone = map_arg[config["backbone"]]
+    m = Matcher(10, extractor, backbone).to(device)
+    opt = map_arg[config["optimizer"]](m.parameters(), lr=args.lr)
+    
     m.load_state_dict(checkpoint["model_state"])
     opt.load_state_dict(checkpoint["optimizer_state"])
     scheduler = utils.get_scheduler(map_arg, opt, config['lr_scheduler'], config['epochs'], config['lr'])
