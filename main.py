@@ -59,7 +59,7 @@ config = vars(args)
 
 start_epoch = 0
 if args.continue_train and os.path.exists(os.path.join(args.run_dir, "model.pth")):
-    checkpoint = torch.load(os.path.join(args.run_dir, "model.pth"), map_location=device)
+    checkpoint = torch.load(os.path.join(args.run_dir, "state.pth"), map_location=device)
     config = checkpoint.get("config", config)
     m.load_state_dict(checkpoint["model_state"])
     opt.load_state_dict(checkpoint["optimizer_state"])
