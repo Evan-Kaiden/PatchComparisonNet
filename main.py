@@ -28,7 +28,7 @@ parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'r
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--lr_scheduler', type=str, default='none', choices=['cosine', 'linear', 'step', 'none'])
 parser.add_argument('--epochs', type=int, default=100)
-parser.add_argument('--continue_train', type=bool, default=False)
+parser.add_argument('--continue_train', action='store_true')
 parser.add_argument('--run_dir', type=str)
 args = parser.parse_args()
 
@@ -58,7 +58,7 @@ scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.epochs, ar
 config = vars(args)
 
 start_epoch = 0
-print( args.continue_train, os.path.exists(os.path.join(args.run_dir, "state.pth")))
+print(args.continue_train, os.path.exists(os.path.join(args.run_dir, "state.pth")))
 if args.continue_train and os.path.exists(os.path.join(args.run_dir, "state.pth")):
     checkpoint = torch.load(os.path.join(args.run_dir, "state.pth"), map_location=device)
     config = checkpoint.get("config", config)
