@@ -33,6 +33,6 @@ train_indices = indicies[2000:]
 mem_data = Subset(train_mem_data, mem_indices)
 train_data = Subset(train_mem_data, train_indices)
 
-trainloader = DataLoader(train_data, batch_size=32, shuffle=True)
-memloader = DataLoader(mem_data, batch_size=500, shuffle=True)
-testloader = DataLoader(test_data, batch_size=32, shuffle=False)
+trainloader = DataLoader(train_data, batch_size=16, shuffle=True)
+memloader = DataLoader(mem_data, batch_size=100, shuffle=True)
+testloader = DataLoader(test_data, batch_size=16, shuffle=False)

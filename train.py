@@ -22,7 +22,9 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, op
 
             optimizer.zero_grad()
                 
-            logits, targets = model(images, targets)   
+            logits, targets, selection_pen = model(images, targets)   
+
+            sel_loss = 0 * (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
             ce_loss = criterion(logits, targets)
 
             patch_embeds, B, Tq = model.encode_patches(images)
@@ -30,7 +32,7 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, op
 
             contrast_loss = contrastive_loss(patch_embeds, targets)
 
-            loss = ce_loss  + 0.25 * contrast_loss
+            loss = ce_loss + 0.25 * contrast_loss + 0.01 * sel_loss
             total_loss += loss.item()
             
             loss.backward()
@@ -92,5 +94,5 @@ def train(epochs : int, model : nn.Module, trainloader : DataLoader, testloader:
                 "scheduler_state": scheduler.state_dict(),
                 "config": config,
                 },
-            os.path.join(config["run_dir"], f"state.pth")
+            os.path.join(os.path.curdir, config["run_dir"], f"state.pth")
             )

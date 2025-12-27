@@ -58,7 +58,6 @@ scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.epochs, ar
 config = vars(args)
 
 start_epoch = 0
-print(args.continue_train, os.path.exists(os.path.join(args.run_dir, "state.pth")))
 if args.continue_train and os.path.exists(os.path.join(args.run_dir, "state.pth")):
     checkpoint = torch.load(os.path.join(args.run_dir, "state.pth"), map_location=device)
     config = checkpoint.get("config", config)
@@ -73,6 +72,7 @@ if args.continue_train and os.path.exists(os.path.join(args.run_dir, "state.pth"
     if "scheduler_state" in checkpoint and checkpoint["scheduler_state"] is not None:
         scheduler.load_state_dict(checkpoint["scheduler_state"])
     start_epoch = checkpoint.get("epoch", 0)
+    print(os.path.join(os.path.curdir, config["run_dir"], f"state.pth"))
 else:
     config.update({
         "device": device,

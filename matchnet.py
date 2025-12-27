@@ -41,7 +41,7 @@ class Matcher(nn.Module):
 
         for m in self.patch_scorer.modules():
             if isinstance(m, nn.Linear):
-                nn.init.zeros_(m.weight)
+                nn.init.normal_(m.weight, std=1e-3)
                 nn.init.zeros_(m.bias)
         
     def encode_patches(self, x):
@@ -57,6 +57,7 @@ class Matcher(nn.Module):
 
         patch_embeds_bt = patch_embeds.view(B, Tq, -1)
         sel_logits = self.patch_scorer(patch_embeds_bt).squeeze(-1)
+        p = sel_logits.softmax(dim=-1)
 
         K = min(self.k, Tq)
         if self.training:
@@ -77,7 +78,7 @@ class Matcher(nn.Module):
         logits = sim_per_class * w_flat.unsqueeze(1)
 
         targets = y_patches
-        return logits, targets
+        return logits, targets, p
 
     def forward(self, x, y=None):
         if y is None:

@@ -46,14 +46,13 @@ def gumbel_topk_st(logits: torch.Tensor, k: int, tau: float):
       weights: (B, T)  # k-hot forward, soft-grad backward
       idx:     (B, k)
     """
-    # sample k indices without replacement via Gumbel perturbation
     g = -torch.log(-torch.log(torch.rand_like(logits)))
     y = logits + g
-    idx = y.topk(k, dim=-1).indices  # (B, k)
+    idx = y.topk(k, dim=-1).indices
 
-    w_hard = torch.zeros_like(logits).scatter_(1, idx, 1.0)      # k-hot
-    w_soft = F.softmax(logits / tau, dim=-1)                     # smooth probs
-    weights = w_hard + (w_soft - w_soft.detach())                # straight-through
+    w_hard = torch.zeros_like(logits).scatter_(1, idx, 1.0)
+    w_soft = F.softmax(logits / tau, dim=-1)
+    weights = w_hard + (w_soft - w_soft.detach())
     return weights, idx
 
 def get_scheduler(map_arg, optimizer, scheduler, epochs, lr):
