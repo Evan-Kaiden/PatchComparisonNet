@@ -17,7 +17,7 @@ from datetime import datetime
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--backbone', type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'
+parser.add_argument('--backbone', type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50',
                                                                          'resnet101', 'resnet152', 'vgg11', 
                                                                          'vgg16', 'vgg19', 'mobilenetv2',
                                                                          'efficientnet'])
