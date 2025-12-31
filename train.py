@@ -96,7 +96,7 @@ def train(epochs : int, model : nn.Module, trainloader : DataLoader, testloader:
                 "test_acc" : acc * 100,
                 "model_state": model.state_dict(),
                 "optimizer_state": optimizer.state_dict(),
-                "scheduler_state": scheduler.state_dict(),
+                "scheduler_state": scheduler.state_dict() if scheduler is not None else None,
                 "config": config,
                 },
             os.path.join(os.path.curdir, config["run_dir"], f"state.pth")
