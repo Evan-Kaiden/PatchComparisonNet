@@ -40,7 +40,7 @@ if torch.cuda.is_available():
 elif torch.mps.is_available():
     device = "mps"
 
-print("device: ", device)
+print("device:", device)
 
 if args.run_dir is None:
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")

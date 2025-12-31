@@ -39,10 +39,18 @@ class Matcher(nn.Module):
             nn.Linear(128, 1)
         )
 
-        for m in self.patch_scorer.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.zeros_(m.weight)
-                nn.init.zeros_(m.bias)
+        l_0 = [*self.patch_scorer.children()][0]
+        l_1 = [*self.patch_scorer.children()][-1]
+
+
+        nn.init.zeros_(l_0.weight)
+        nn.init.zeros_(l_0.bias)
+        nn.init.normal_(l_1.weight, std=1e-3)
+        nn.init.zeros_(l_1.bias)
+        # for m in self.patch_scorer.modules():
+        #     if isinstance(m, nn.Linear):
+        #         nn.init.zeros_(m.weight)
+        #         nn.init.zeros_(m.bias)
         
     def encode_patches(self, x):
         patches = self.extractor(x)
