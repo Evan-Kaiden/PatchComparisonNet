@@ -24,7 +24,7 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, op
                 
             logits, targets, selection_pen = model(images, targets)   
 
-            sel_loss = 0 * (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
+            sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
             ce_loss = criterion(logits, targets)
 
             patch_embeds, B, Tq = model.encode_patches(images)
