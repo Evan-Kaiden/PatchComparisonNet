@@ -13,13 +13,6 @@ from dataloader import testloader, memloader
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-
-def undoNorm(tensor):
-    mean = torch.tensor([0.4914, 0.4822, 0.4465], device=tensor.device).view(-1,1,1)
-    std = torch.tensor([0.2470, 0.2435, 0.2616], device=tensor.device).view(-1,1,1)
-    return tensor * std + mean
-
-
 def heatmap_from_scores(model, image, patch_size, stride):
     if len(image.shape) == 3:
         image = image.unsqueeze(0)
@@ -136,13 +129,14 @@ backbone = map_arg[config["backbone"]]
 
 kernel = config["patch_size"]
 stride = config["stride"]
+mode = checkpoint["last_mode"]
 
 # =========== Load in Model Weights ===========
 
 model = Matcher(10, extractor, backbone)
-model.load_state_dict(checkpoint["model_state"])
+model.load_state_dict(checkpoint[f"{mode}_model_state"])
 model.eval()
-model.to("mps")
+# model.to("mps")
 
 # =========== Select Image ===========
 
@@ -153,5 +147,5 @@ n = torch.randint(low=0, high=30, size=(1,)).item()
 image = image[n:n+1, :, :,]
 
 # =========== Generate Visual ===========
-for i in range(10):
-    heatmap_from_patches(model, image.to("mps"), memory.to("mps"), cls.to("mps"), config["patch_size"], config["stride"], wrt=i)
+heatmap_from_scores(model, image, config["patch_size"], config["stride"])
+# heatmap_from_patches(model, image.to("mps"), memory.to("mps"), cls.to("mps"), config["patch_size"], config["stride"])

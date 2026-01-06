@@ -215,11 +215,12 @@ backbone = map_arg[config["backbone"]]
 
 kernel = config["patch_size"]
 stride = config["stride"]
+mode = checkpoint["last_mode"]
 
 # =========== Load in Model Weights ===========
 
 model = Matcher(10, extractor, backbone)
-model.load_state_dict(checkpoint["model_state"])
+model.load_state_dict(checkpoint[f"{mode}_model_state"])
 model.eval()
 model = model.to("mps")
 
@@ -228,18 +229,10 @@ model = model.to("mps")
 memory, cls = next(iter(memloader))
 
 loader = iter(testloader)
-print("finding correctly classified image")
-while True:
-    image, label = next(loader)
-    n = torch.randint(low=0, high=30, size=(1,)).item()
-    image = image[n:n+1, :, :,]
-    break
-    with torch.no_grad():
-        logits = model.predict(image.to("mps"), memory.to("mps"), cls.to("mps"))
-    mask = (torch.argmax(logits, dim=-1).cpu() == label)
-    if mask.any():
-        image = image[mask][0:1]
-        break
+image, label = next(loader)
+n = torch.randint(low=0, high=30, size=(1,)).item()
+image = image[n:n+1, :, :,]
+    
 
 print("finding top contributors")
 with torch.no_grad():
