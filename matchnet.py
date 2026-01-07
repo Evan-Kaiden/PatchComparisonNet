@@ -55,8 +55,8 @@ class Matcher(nn.Module):
 
         for m in self.patch_scorer.named_modules():
             if isinstance(m, nn.Linear):
-                    nn.init.normal_(m.weight, std=1e-3)
-                    nn.init.zeros_(m.bias)
+                    nn.init.xavier_normal_(m.weight)
+                    nn.init.constant_(m.bias, 0.0)
         
     def encode_patches(self, x):
         patches = self.extractor(x)
@@ -126,11 +126,12 @@ class Matcher(nn.Module):
         idx = sel_logits.topk(K, dim=-1).indices
         w = torch.zeros_like(sel_logits).scatter_(1, idx, 1.0)
 
-        sim = (img_embeds @ mem_embeds.t()) / self.temperature
+        
 
         cls = cls.repeat_interleave(Tm)
         cls_one_hot = F.one_hot(cls, num_classes=self.num_classes).float()
-
+        
+        sim = (img_embeds @ mem_embeds.t()) / self.temperature
         sim_per_class = sim @ cls_one_hot
         sim_per_class = sim_per_class.view(B, Tq, self.num_classes)
 

@@ -26,8 +26,8 @@ parser.add_argument('--stride', type=int, default=3)
 parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'rmsprop', 'sgd'])
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--lr_scheduler', type=str, default='none', choices=['cosine', 'linear', 'step', 'none'])
-parser.add_argument('--base_epochs', type=int, default=100)
-parser.add_argument('--selector_epochs', type=int, default=50)
+parser.add_argument('--base_epochs', type=int, default=50)
+parser.add_argument('--selector_epochs', type=int, default=10)
 parser.add_argument('--continue_train', action='store_true')
 parser.add_argument('--run_dir', type=str)
 args = parser.parse_args()
@@ -87,8 +87,8 @@ if args.continue_train and os.path.exists(os.path.join(args.run_dir, "state.pth"
             
         m.scorer_train_mode()
 
-        opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr)
-        scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr)
+        opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr/10)
+        scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr/10)
         
         train(epochs=args.selector_epochs, model=m, trainloader=trainloader, 
             testloader=testloader, memloader=memloader, optimizer=opt, 
@@ -113,8 +113,8 @@ if args.continue_train and os.path.exists(os.path.join(args.run_dir, "state.pth"
 
         m.scorer_train_mode()
 
-        opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr)
-        scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr)
+        opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr/10)
+        scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr/10)
 
         train(epochs=args.selector_epochs, model=m, trainloader=trainloader, 
             testloader=testloader, memloader=memloader, optimizer=opt, 
@@ -170,8 +170,8 @@ else:
 
     m.scorer_train_mode()
 
-    opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr)
-    scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr)
+    opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr/10)
+    scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr/10)
 
     print("Training Patch Selector")
     train(epochs=args.selector_epochs, model=m, trainloader=trainloader, 
