@@ -24,7 +24,7 @@ class PatchEncoder(nn.Module):
         
         
 class Matcher(nn.Module):
-    def __init__(self, num_classes, extractor, backbone, k=6, tau_gumbel=1.0, embed_dim=256, temperature=0.1):
+    def __init__(self, num_classes, extractor, backbone, k=6, tau_gumbel=1.0, embed_dim=256, temperature=0.5):
         super().__init__()
         self.base_train = True
         self.num_classes = num_classes
