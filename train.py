@@ -58,12 +58,12 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, me
         if model.base_train:
             contrast_loss = contrastive_loss(patch_embeds, patch_targets)
             if epoch < 10:
-                loss = contrastive_loss
+                loss = contrast_loss
             else:
                 loss = ce_loss + 10 * contrast_loss
             # loss = contrast_loss
             metrics["ce"] += ce_loss.item()
-            metrics["contrastive"] += 10* (contrast_loss).item()
+            metrics["contrastive"] += 10 * (contrast_loss).item()
         else:
             sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
             loss = ce_loss + 0.1 * sel_loss
