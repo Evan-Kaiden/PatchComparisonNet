@@ -4,52 +4,57 @@ import torch.nn.functional as F
 
 # https://arxiv.org/pdf/2004.11362v1 (Supervised Contrastive Learning)
 
+
+
 class SupervisedContrastiveLoss(nn.Module):
-    def __init__(self, temperature=0.1):
-        super().__init__()
-        self.temperature = temperature
+   def __init__(self, temperature=0.1):
+       super().__init__()
+       self.temperature = temperature
 
-    def forward(self, feats, labels):
-        device = feats.device
-        N = feats.size(0)
 
-        feats = F.normalize(feats, dim=1)
+   def forward(self, feats, labels):
+       device = feats.device
+       N = feats.size(0)
 
-        labels = labels.contiguous().view(-1, 1)
-        mask = torch.eq(labels, labels.T).float().to(device)
+       labels = labels.contiguous().view(-1, 1)
+       mask = torch.eq(labels, labels.T).float().to(device)
 
-        logits = torch.div(feats @ feats.T, self.temperature)
 
-        logits_max, _ = torch.max(logits, dim=1, keepdim=True)
-        logits = logits - logits_max.detach()
+       # Use negative squared Euclidean distance as similarity
+       # sim[i,j] = -||feats[i] - feats[j]||^2
+       feats_square = (feats ** 2).sum(dim=1, keepdim=True)
+       dist_square = feats_square + feats_square.T - 2 * (feats @ feats.T)
+       logits = -dist_square / self.temperature
 
-        logits_mask = torch.ones_like(mask) - torch.eye(N, device=device)
-        mask = mask * logits_mask
 
-        exp_logits = torch.exp(logits) * logits_mask
+       logits_max, _ = torch.max(logits, dim=1, keepdim=True)
+       logits = logits - logits_max.detach()
 
-        log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-8)
 
-        pos_counts = mask.sum(dim=1)
-        valid = pos_counts > 0
-        mean_log_prob_pos = torch.zeros_like(pos_counts, device=device)
-        
+       logits_mask = torch.ones_like(mask) - torch.eye(N, device=device)
+       mask = mask * logits_mask
 
-        # mean_log_prob_pos[valid] = (mask[valid] * log_prob[valid]).sum(dim=1) / pos_counts[valid]
-        # loss = -mean_log_prob_pos[valid].mean()
-        
-        # ===
-        valid_f = valid.float()  
 
-        numerator = (mask * log_prob).sum(dim=1)
-        denominator = pos_counts.clamp_min(1)
+       exp_logits = torch.exp(logits) * logits_mask
+       log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True) + 1e-8)
 
-        mean_log_prob_pos = numerator / denominator
-        mean_log_prob_pos = mean_log_prob_pos * valid_f
 
-        loss = -(mean_log_prob_pos * valid_f).sum() / valid_f.sum().clamp_min(1)
-        # === 
-        return loss
+       pos_counts = mask.sum(dim=1)
+       valid = pos_counts > 0
+      
+       if valid.sum() == 0:
+           return torch.tensor(0.0, device=device, requires_grad=True)
+      
+       valid_f = valid.float()
+       numerator = (mask * log_prob).sum(dim=1)
+       denominator = pos_counts.clamp_min(1)
+       mean_log_prob_pos = numerator / denominator
+       mean_log_prob_pos = mean_log_prob_pos * valid_f
+       loss = -(mean_log_prob_pos * valid_f).sum() / valid_f.sum().clamp_min(1)
+      
+       return loss
+
+
     
 def gumbel_topk_st(logits: torch.Tensor, k: int, tau: float):
     g = -torch.log(-torch.log(torch.rand_like(logits)))

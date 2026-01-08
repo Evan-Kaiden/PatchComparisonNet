@@ -16,37 +16,35 @@ contrastive_loss = SupervisedContrastiveLoss()
 def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, optimizer : Optimizer, criterion, scheduler, device=None):
     model.train()
     total = len(trainloader)
-    # pbar = tqdm(total=total, desc=f"Train Epoch {epoch}", leave=False)
+    pbar = tqdm(total=total, desc=f"Train Epoch {epoch}", leave=False)
     total_loss = 0.0
-    # with pbar:
-    for images,targets in trainloader:
-        images, targets = images.to(device), targets.to(device)
+    with pbar:
+        for images,targets in trainloader:
+            images, targets = images.to(device), targets.to(device)
 
-        optimizer.zero_grad()
+            optimizer.zero_grad()
+                
+            logits, targets, selection_pen = model(images, targets)   
+            patch_embeds, _, _ = model.encode_patches(images)
+
+            ce_loss = criterion(logits, targets)
+
+            if model.base_train:
+                contrast_loss = contrastive_loss(patch_embeds, targets)
+                loss = ce_loss + 0.25 * contrast_loss
+            elif not model.base_train:
+                sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
+                loss = ce_loss + 0.1 * sel_loss
+
+            total_loss += loss.item()
             
-        logits, targets, selection_pen = model(images, targets)   
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
 
-        patch_embeds, _, _ = model.encode_patches(images)
-        patch_embeds = F.normalize(patch_embeds, dim=1)
-
-        ce_loss = criterion(logits, targets)
-
-        if model.base_train:
-            contrast_loss = contrastive_loss(patch_embeds, targets)
-            loss = ce_loss + 0.25 * contrast_loss
-        elif not model.base_train:
-            sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
-            loss = ce_loss + 0.1 * sel_loss
-
-        total_loss += loss.item()
-        
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-
-        # pbar.update(1)
-        if scheduler is not None:
-            scheduler.step(total_loss / total)
+            pbar.update(1)
+            if scheduler is not None:
+                scheduler.step(total_loss / total)
 
 
 def test(epoch: int, model : nn.Module, testloader : DataLoader, memloader : DataLoader, criterion, device=None):
@@ -60,30 +58,30 @@ def test(epoch: int, model : nn.Module, testloader : DataLoader, memloader : Dat
         mem_iter = iter(memloader)
 
         total = 0
-        # pbar = tqdm(total=len(testloader), desc="Testing", leave=False)
+        pbar = tqdm(total=len(testloader), desc="Testing", leave=False)
 
-        # with pbar:
-        for images, targets in testloader:
-            images, targets = images.to(device), targets.to(device)
+        with pbar:
+            for images, targets in testloader:
+                images, targets = images.to(device), targets.to(device)
+            
+                try:
+                    mem_images, cls = next(mem_iter)
+                except StopIteration:
+                    mem_iter = iter(memloader)
+                    mem_images, cls = next(mem_iter)
+
+                mem_images, cls = mem_images.to(device), cls.to(device)
         
-            try:
-                mem_images, cls = next(mem_iter)
-            except StopIteration:
-                mem_iter = iter(memloader)
-                mem_images, cls = next(mem_iter)
+                logits = model.predict(images, mem_images, cls)
 
-            mem_images, cls = mem_images.to(device), cls.to(device)
-    
-            logits = model.predict(images, mem_images, cls)
+                loss = criterion(logits, targets)
+                pred_labels = logits.argmax(dim=1)
 
-            loss = criterion(logits, targets)
-            pred_labels = logits.argmax(dim=1)
+                correct_total += (pred_labels == targets).sum().item()
+                loss_total += loss.item() * images.size(0)
+                total += images.size(0)
 
-            correct_total += (pred_labels == targets).sum().item()
-            loss_total += loss.item() * images.size(0)
-            total += images.size(0)
-
-            # pbar.update(1)
+                pbar.update(1)
 
     acc = correct_total / total
     loss = loss_total / total
