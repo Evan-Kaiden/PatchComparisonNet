@@ -6,7 +6,7 @@ from utils import gumbel_topk_st
 
 
 class PatchEncoder(nn.Module):
-    def __init__(self, backbone, embed_dim=256):
+    def __init__(self, backbone, embed_dim=128):
         super().__init__()
 
         base = backbone
@@ -24,7 +24,7 @@ class PatchEncoder(nn.Module):
         
         
 class Matcher(nn.Module):
-    def __init__(self, num_classes, extractor, backbone, k=6, tau_gumbel=1.0, embed_dim=256, temperature=0.5):
+    def __init__(self, num_classes, extractor, backbone, k=6, tau_gumbel=1.0, embed_dim=128, temperature=0.5):
         super().__init__()
         self.base_train = True
         self.num_classes = num_classes
