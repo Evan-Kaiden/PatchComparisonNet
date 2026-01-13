@@ -29,6 +29,8 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, me
         "total": 0,
     }
     mem_iter = iter(memloader)
+    use_selector = (15 <= epoch < 20) or (epoch >= 25)
+    model.set_train_mode(base_train=not use_selector)
     for images, targets in trainloader:
         images = images.to(device)
         targets = targets.to(device)
@@ -45,31 +47,63 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, me
 
         optimizer.zero_grad()
    
-        logits, patch_logits, patch_targets, selection_pen = model(images, targets, mem_images, cls)   
-        patch_embeds, _, _ = model.encode_patches(images)
 
-        ce_loss = criterion(logits, targets)
+
+
+        # if model.base_train:
+        
+        sel_loss = torch.tensor(0.0, device=device)
+        ce_loss = torch.tensor(0.0, device=device)
+        if epoch < 10: #10
+            logits, _, patch_targets, selection_pen = model(images, targets, mem_images, cls)   
+            patch_embeds, _, _ = model.encode_patches(images)
+            contrast_loss = contrastive_loss(patch_embeds, patch_targets)
+
+            loss = contrast_loss
+        elif epoch < 15: #15
+            logits, _, patch_targets, selection_pen = model(images, targets, mem_images, cls)   
+            patch_embeds, _, _ = model.encode_patches(images)
+            contrast_loss = contrastive_loss(patch_embeds, patch_targets)
+            
+            ce_loss = criterion(logits, targets)
+
+            loss = ce_loss + 100 * contrast_loss
+        elif epoch < 20: #20
+            logits, _, patch_targets, selection_pen = model(images, targets, mem_images, cls)   
+            patch_embeds, _, _ = model.encode_patches(images)
+            contrast_loss = contrastive_loss(patch_embeds, patch_targets)
+            ce_loss = criterion(logits, targets)
+
+            sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
+            loss = ce_loss + 100 * contrast_loss + 0.1 * sel_loss
+        elif epoch < 25: #25
+            logits, _, patch_targets, selection_pen = model(images, targets, mem_images, cls)   
+            patch_embeds, _, _ = model.encode_patches(images)
+            contrast_loss = contrastive_loss(patch_embeds, patch_targets)
+
+            loss = contrast_loss
+        else:
+            logits, _, patch_targets, selection_pen = model(images, targets, mem_images, cls)   
+            patch_embeds, _, _ = model.encode_patches(images)
+            contrast_loss = contrastive_loss(patch_embeds, patch_targets)
+            ce_loss = criterion(logits, targets)
+
+            sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
+            loss = ce_loss + 100 * contrast_loss + 0.1 * sel_loss
 
         preds = logits.argmax(dim=-1)
         metrics["correct"] += (preds == targets).sum().item()
         metrics["total"] += targets.size(0)
 
+        metrics["ce"] += ce_loss.item()
+        metrics["contrastive"] += 100 * (contrast_loss).item()
+        metrics["selection"] += (0.1 * sel_loss).item()
+        # else:
+        #     sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
+        #     loss = ce_loss + 0.1 * sel_loss
 
-        if model.base_train:
-            contrast_loss = contrastive_loss(patch_embeds, patch_targets)
-            if epoch < 10:
-                loss = contrast_loss
-            else:
-                loss = ce_loss + 10 * contrast_loss
-            # loss = contrast_loss
-            metrics["ce"] += ce_loss.item()
-            metrics["contrastive"] += 10 * (contrast_loss).item()
-        else:
-            sel_loss = (selection_pen * torch.log(selection_pen + 1e-8)).sum(dim=1).mean()
-            loss = ce_loss + 0.1 * sel_loss
-
-            metrics["ce"] += ce_loss.item()
-            metrics["selection"] += (0.1 * sel_loss).item()
+        #     metrics["ce"] += ce_loss.item()
+        #     metrics["selection"] += (0.1 * sel_loss).item()
 
         total_loss += loss.item()
 
@@ -88,24 +122,26 @@ def train_one_epoch(epoch : int, model : nn.Module, trainloader : DataLoader, me
     avg_ce = metrics["ce"] / num_batches
     acc = metrics["correct"] / max(1, metrics["total"])
 
-    if model.base_train:
-        avg_contrast = metrics["contrastive"] / num_batches
-        print(
-            f"[BASE] Epoch {epoch} | "
-            f"CE {avg_ce:.4f} | "
-            f"Contrast {avg_contrast:.4f} | "
-            f"Acc {acc:.4f} | "
-            f"LR {lr:.6f}"
-        )
-    else:
-        avg_sel = metrics["selection"] / num_batches
-        print(
-            f"[SELECTOR] Epoch {epoch} | "
-            f"CE {avg_ce:.4f} | "
-            f"Selection {avg_sel:.4f} | "
-            f"Acc {acc:.4f} | "
-            f"LR {lr:.6f}"
-        )
+    # if model.base_train:
+    avg_contrast = metrics["contrastive"] / num_batches
+    avg_sel = metrics["selection"] / num_batches
+    print(
+        f"[TRAIN] Epoch {epoch} | "
+        f"CE {avg_ce:.4f} | "
+        f"Contrast {avg_contrast:.4f} | "
+        f"Selection {avg_sel:.4f} | "
+        f"Acc {acc:.4f} | "
+        f"LR {lr:.6f}"
+    )
+    # else:
+    #     avg_sel = metrics["selection"] / num_batches
+    #     print(
+    #         f"[SELECTOR] Epoch {epoch} | "
+    #         f"CE {avg_ce:.4f} | "
+    #         f"Selection {avg_sel:.4f} | "
+    #         f"Acc {acc:.4f} | "
+    #         f"LR {lr:.6f}"
+    #     )
 
 def test(epoch: int, model : nn.Module, testloader : DataLoader, memloader : DataLoader, criterion, device=None):
     model.eval()

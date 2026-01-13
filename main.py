@@ -168,14 +168,14 @@ else:
         criterion=criterion, scheduler=scheduler, checkpoint=checkpoint, config=config, 
         start_epoch=start_epoch, device=device)
 
-    m.scorer_train_mode()
+    # m.scorer_train_mode()
 
-    opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr/10)
-    scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr/10)
+    # opt = map_arg[args.optimizer](m.patch_scorer.parameters(), lr=args.lr/10)
+    # scheduler = utils.get_scheduler(map_arg, opt, args.lr_scheduler, args.selector_epochs, args.lr/10)
 
-    print("Training Patch Selector")
-    train(epochs=args.selector_epochs, model=m, trainloader=trainloader, 
-        testloader=testloader, memloader=memloader, optimizer=opt, 
-        criterion=criterion, scheduler=scheduler, checkpoint=checkpoint, config=config, 
-        start_epoch=0, device=device)
+    # print("Training Patch Selector")
+    # train(epochs=args.selector_epochs, model=m, trainloader=trainloader, 
+    #     testloader=testloader, memloader=memloader, optimizer=opt, 
+    #     criterion=criterion, scheduler=scheduler, checkpoint=checkpoint, config=config, 
+    #     start_epoch=0, device=device)
 

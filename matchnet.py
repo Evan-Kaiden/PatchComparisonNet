@@ -44,6 +44,9 @@ class Matcher(nn.Module):
             p.requires_grad = False
             p.requires_grad = False
 
+    def set_train_mode(self, base_train=True):
+        self.base_train = base_train
+        
     def scorer_train_mode(self):
         self.base_train = False
 
@@ -89,7 +92,7 @@ class Matcher(nn.Module):
         if self.base_train:
             logits = sim_per_class.sum(dim=1)
             patch_logits = sim_per_class
-            return logits, patch_logits, patch_targets, None
+            return logits, patch_logits, patch_targets, torch.tensor(0, device=y.device)
         else:
             query_embeds_bt = query_embeds.view(B, Tq, -1)
             sel_logits = self.patch_scorer(query_embeds_bt).squeeze(-1)
